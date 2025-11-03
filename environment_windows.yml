@@ -1,0 +1,21 @@
+name: CV_competition
+channels:
+  - defaults
+  - pytorch
+dependencies:
+  - python=3.10
+  - pip
+  - pytorch
+  - torchvision
+  - torchaudio
+  - numpy
+  - pandas
+  - matplotlib
+  - scikit-learn
+  - opencv
+  - pillow
+  - pip:
+      - jupyter
+      - ipykernel
+      - tqdm
+      - wandb
