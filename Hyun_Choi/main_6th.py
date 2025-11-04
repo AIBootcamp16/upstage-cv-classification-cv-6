@@ -18,6 +18,10 @@ from PIL import Image
 import urllib.request
 import glob
 import warnings
+import wandb
+import random
+from torch.optim.lr_scheduler import LambdaLR
+import math # Cosine Annealing을 위해 추가
 
 # 경고 메시지 비활성화
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -26,7 +30,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # 1. 설정 및 환경
 # ==============================================================================
 
-# Augraphy 라이브러리 체크
+# Augraphy 라이브러리 체크 (필요시 설치)
 try:
     from augraphy import InkBleed, PaperFactory, DirtyDrum, Jpeg, Brightness, AugraphyPipeline
     AUGRAPHY_AVAILABLE = True
@@ -35,38 +39,39 @@ except ImportError:
     print("⚠️ Augraphy 라이브러리를 찾을 수 없습니다. (pip install augraphy) - 문서 특화 증강 없이 진행됩니다.")
 
 class Config:
-    """모델 및 학습에 필요한 하이퍼파라미터 설정 (ConvNeXt, 384 해상도 적용)"""
-    # 🔥 ConvNeXt 모델로 변경 (아키텍처 다양화)
-    MODEL_NAME = 'convnext_base.fb_in22k' 
+    """최종 강건한 일반화를 위한 설정 (ConvNeXt + 극단적 노이즈 + TTA)"""
+    PROJECT_NAME = "document-classification-ultimate"
+    RUN_NAME = "ConvNeXt_ExtremeNoise_TTA_Warmup"
+    
+    MODEL_NAME = 'convnext_base.fb_in22k_ft_in1k' 
     NUM_CLASSES = 17
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    # 하이퍼파라미터 
-    N_EPOCHS = 30 
-    # BATCH_SIZE는 384x384 해상도에서 VRAM에 따라 8 -> 4로 줄여야 할 수 있습니다.
-    BATCH_SIZE = 8  
-    # 🔥 이미지 해상도 상향 (640 -> 384)
+    USE_MIX_STRATEGY = True
+    MIXUP_ALPHA = 0.4
+    CUTMIX_ALPHA = 1.0 
+    
+    N_EPOCHS = 50 
+    BATCH_SIZE = 16  
     IMAGE_SIZE = 384  
-    LR = 5e-5
     
-    # 경사 누적 설정 (Effective Batch Size = 8 * 4 = 32 유지)
-    GRADIENT_ACCUMULATION_STEPS = 4
+    LR = 1e-4 
+    WARMUP_EPOCHS = 5
     
-    # 정규화 및 최적화
-    N_FOLDS = 5
+    GRADIENT_ACCUMULATION_STEPS = 2
+    
+    N_FOLDS = 5 
     WEIGHT_DECAY = 0.05
     LABEL_SMOOTHING = 0.05
     
-    # 스케줄러
-    # 🔥 T_0을 10으로 설정하여 LR 하강 속도를 늦춥니다.
-    SCHEDULER_T0 = 10
+    SCHEDULER_T0 = 15 
     SCHEDULER_TMULT = 2
-    PATIENCE = 7 
+    PATIENCE = 10 
     
-    # 경로 및 증강
+    TTA_SIZE = 7 
+    
     DATA_DIR = 'data'
-    AUG_STRATEGY = 'hybrid'
-
+    ENSEMBLE_MODEL_BASE_DIR = './experiments'
 
 # ==============================================================================
 # 2. 데이터 처리 함수 및 클래스
@@ -77,6 +82,7 @@ def download_and_extract_data(data_dir='data'):
     data_path = Path(data_dir)
     
     if data_path.exists() and (data_path / 'train.csv').exists():
+        print("✅ 데이터가 이미 존재합니다. 다운로드 건너김.\n")
         return
     
     print("="*70)
@@ -138,7 +144,7 @@ def ensure_3_channels(image):
     else:
         return image
 
-def get_augraphy_pipeline(strategy='hybrid'):
+def get_augraphy_pipeline():
     """문서 이미지 특화 증강 파이프라인"""
     if not AUGRAPHY_AVAILABLE:
         return None
@@ -147,23 +153,29 @@ def get_augraphy_pipeline(strategy='hybrid'):
 
     ink_phase = [InkBleed(intensity_range=(0.05, 0.20), p=ink_p)]
     paper_phase = [PaperFactory(p=paper_p), DirtyDrum(p=paper_p * 0.7)]
-    post_phase = [Jpeg(quality_range=(50, 95), p=post_p), Brightness(brightness_range=(0.8, 1.2), p=post_p)]
+    # JPEG 압축 품질을 낮춰 테스트 도메인 시뮬레이션
+    post_phase = [Jpeg(quality_range=(30, 95), p=post_p), Brightness(brightness_range=(0.8, 1.2), p=post_p)] 
 
     return AugraphyPipeline(ink_phase=ink_phase, paper_phase=paper_phase, post_phase=post_phase)
 
 
 def get_transforms(stage, cfg):
-    """Albumentations 및 Augraphy를 통합한 이미지 변환 파이프라인 (Resize 384x384 적용)"""
-    augraphy_pipeline = get_augraphy_pipeline(cfg.AUG_STRATEGY)
+    """극단적인 노이즈 증강(도메인 시뮬레이션) 및 TTA 통합"""
+    augraphy_pipeline = get_augraphy_pipeline()
     
     if stage == 'train':
         albu_list = [
-            # 🔥 해상도 384x384로 변경
             A.Resize(cfg.IMAGE_SIZE, cfg.IMAGE_SIZE), 
-            A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=10, p=0.7),
+            A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.08, rotate_limit=8, p=0.7), 
             A.HorizontalFlip(p=0.5),
-            A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.5),
-            A.CLAHE(p=0.3),
+            A.VerticalFlip(p=0.1),
+            # 극단적인 노이즈 주입 및 Blur
+            A.OneOf([
+                A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1),
+                A.GaussNoise(var_limit=(10.0, 50.0), p=1), 
+                A.Blur(blur_limit=5, p=1),
+            ], p=0.8),
+            A.CoarseDropout(max_holes=10, max_height=10, max_width=10, p=0.4),
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ToTensorV2(),
         ]
@@ -176,9 +188,23 @@ def get_transforms(stage, cfg):
             
         return A.Compose(albu_list)
     
-    elif stage == 'val' or stage == 'test':
+    # TTA를 위한 변환
+    elif stage == 'test': 
         return A.Compose([
-            # 🔥 해상도 384x384로 변경
+            A.Resize(cfg.IMAGE_SIZE, cfg.IMAGE_SIZE),
+            A.OneOf([
+                A.HorizontalFlip(p=1.0),
+                A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=1.0),
+                A.JpegCompression(quality_lower=50, quality_upper=100, p=1.0),
+                A.Sharpen(p=1.0),
+            ], p=0.8),
+            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ToTensorV2(),
+        ])
+    
+    # Validation 및 기본 추론 (TTA가 아닌 경우)
+    elif stage == 'val_base':
+        return A.Compose([
             A.Resize(cfg.IMAGE_SIZE, cfg.IMAGE_SIZE),
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ToTensorV2(),
@@ -190,20 +216,37 @@ def get_transforms(stage, cfg):
 # 3. 학습 및 추론 로직
 # ==============================================================================
 
+def mixup_cutmix_data(images, labels, alpha, mix_strategy='mixup'):
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1
+        
+    rand_index = torch.randperm(images.size(0)).to(images.device)
+    mixed_images = lam * images + (1 - lam) * images[rand_index, :]
+
+    label_a, label_b = labels, labels[rand_index]
+    return mixed_images, label_a, label_b, lam
+
+
 def train_fold(fold, train_df, val_df, exp_dir, class_weights, cfg):
-    """단일 Fold 학습 및 최적 모델 저장 (경사 누적 적용)"""
+    """단일 Fold 학습 (Warmup 스케줄러 적용) - Fold 번호는 1부터 시작"""
     print(f'\n{"="*50}')
-    print(f'⚡️ Fold {fold} 학습 시작')
+    print(f'⚡️ Fold {fold} 학습 시작 - Model: {cfg.MODEL_NAME}')
     print(f'{"="*50}')
     
-    train_dataset = DocumentDataset(train_df, f'{cfg.DATA_DIR}/train', get_transforms('train', cfg))
-    val_dataset = DocumentDataset(val_df, f'{cfg.DATA_DIR}/train', get_transforms('val', cfg))
+    run = None
+    try:
+        run = wandb.init(project=cfg.PROJECT_NAME, name=f"{cfg.RUN_NAME}_Fold_{fold}", config=vars(cfg), reinit=True)
+    except Exception:
+        print("WandB 초기화 실패. 로깅 없이 진행됩니다.")
     
-    # BATCH_SIZE=8 사용
+    train_dataset = DocumentDataset(train_df, f'{cfg.DATA_DIR}/train', get_transforms('train', cfg))
+    val_dataset = DocumentDataset(val_df, f'{cfg.DATA_DIR}/train', get_transforms('val_base', cfg))
+    
     train_loader = DataLoader(train_dataset, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=cfg.BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
     
-    # 🔥 ConvNeXt 모델은 pretrained=True 시 ImageNet-22k 가중치를 가져옵니다.
     model = timm.create_model(cfg.MODEL_NAME, pretrained=True, num_classes=cfg.NUM_CLASSES)
     model.to(cfg.DEVICE)
 
@@ -212,13 +255,24 @@ def train_fold(fold, train_df, val_df, exp_dir, class_weights, cfg):
 
     optimizer = optim.AdamW(model.parameters(), lr=cfg.LR, weight_decay=cfg.WEIGHT_DECAY)
 
-    # 🔥 T_0=10 (cfg.SCHEDULER_T0) 설정 적용
-    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        optimizer, T_0=cfg.SCHEDULER_T0, T_mult=cfg.SCHEDULER_TMULT, eta_min=1e-7
-    )
+    # Warmup + CosineAnnealing 스케줄러 구현
+    def lr_lambda(current_step):
+        if current_step < cfg.WARMUP_EPOCHS * len(train_loader):
+            # Warmup
+            return float(current_step) / float(max(1, cfg.WARMUP_EPOCHS * len(train_loader)))
+        # Cosine Annealing (Warmup 후 최대 LR에서 시작)
+        T_total = cfg.N_EPOCHS * len(train_loader)
+        T_rest = T_total - cfg.WARMUP_EPOCHS * len(train_loader)
+        T_current = current_step - cfg.WARMUP_EPOCHS * len(train_loader)
+
+        return 0.5 * (1. + math.cos(math.pi * T_current / T_rest))
+
+    scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
     
     best_f1 = 0.0
     patience_counter = 0
+    
+    # 모델 저장 경로 설정 (Fold 번호 1부터 시작)
     model_path = os.path.join(exp_dir, f'best_model_fold_{fold}.pth')
     
     for epoch in range(cfg.N_EPOCHS):
@@ -226,33 +280,44 @@ def train_fold(fold, train_df, val_df, exp_dir, class_weights, cfg):
         running_loss = 0.0
         train_preds_list, train_labels_list = [], []
         
-        optimizer.zero_grad() # 에포크 시작 시 1회 초기화
+        optimizer.zero_grad() 
         
         for step, (images, labels) in enumerate(tqdm(train_loader, desc=f'Fold {fold} | Epoch {epoch+1}/{cfg.N_EPOCHS} (Train)')):
             images, labels = images.to(cfg.DEVICE), labels.to(cfg.DEVICE)
             
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+            # Mixup/CutMix 로직
+            if cfg.USE_MIX_STRATEGY and random.random() < 0.8:
+                strategy = 'mixup' if random.random() < 0.5 else 'cutmix'
+                alpha = cfg.MIXUP_ALPHA if strategy == 'mixup' else cfg.CUTMIX_ALPHA
+                
+                mixed_images, label_a, label_b, lam = mixup_cutmix_data(images, labels, alpha, strategy)
+                outputs = model(mixed_images)
+                loss = lam * criterion(outputs, label_a) + (1 - lam) * criterion(outputs, label_b)
+                
+                preds = outputs.argmax(dim=1) 
+                target_labels = label_a
+            else:
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                preds = outputs.argmax(dim=1)
+                target_labels = labels
             
-            # 경사 누적: Loss를 누적 스텝으로 나누어 정규화
+            # 경사 누적
             loss = loss / cfg.GRADIENT_ACCUMULATION_STEPS
             loss.backward()
             
-            # 옵티마이저/스케줄러는 누적 스텝마다 1회 실행
             if (step + 1) % cfg.GRADIENT_ACCUMULATION_STEPS == 0:
                 optimizer.step()
-                # 스케줄러 업데이트 시점을 누적된 스텝으로 보정
-                scheduler.step(epoch + (step + 1) / len(train_loader)) 
-                optimizer.zero_grad() # 누적된 경사 적용 후 초기화
+                scheduler.step()
+                optimizer.zero_grad() 
             
-            # Loss 계산 시 누적 스텝만큼 다시 곱하여 실제 배치 크기 손실을 반영
             running_loss += loss.item() * images.size(0) * cfg.GRADIENT_ACCUMULATION_STEPS
-            train_preds_list.extend(outputs.argmax(dim=1).cpu().numpy())
-            train_labels_list.extend(labels.cpu().numpy())
+            train_preds_list.extend(preds.cpu().numpy())
+            train_labels_list.extend(target_labels.cpu().numpy())
         
-        # 마지막 스텝이 누적 경사 단계에 도달하지 못한 경우 처리
         if (step + 1) % cfg.GRADIENT_ACCUMULATION_STEPS != 0:
              optimizer.step()
+             scheduler.step()
              optimizer.zero_grad()
 
         epoch_loss = running_loss / len(train_dataset)
@@ -278,6 +343,14 @@ def train_fold(fold, train_df, val_df, exp_dir, class_weights, cfg):
         
         print(f"  [Result] Loss: {epoch_loss:.4f} / Val Loss: {val_loss:.4f} | Train F1: {train_f1:.4f} | Val F1: {val_f1:.4f} (Best: {best_f1:.4f})")
         
+        # WandB 로깅
+        if run:
+            run.log({
+                "Fold": fold, "Epoch": epoch, "LR": optimizer.param_groups[0]['lr'],
+                "Train/Loss": epoch_loss, "Train/F1": train_f1,
+                "Val/Loss": val_loss, "Val/F1": val_f1
+            })
+        
         if val_f1 > best_f1:
             best_f1 = val_f1
             patience_counter = 0
@@ -289,46 +362,78 @@ def train_fold(fold, train_df, val_df, exp_dir, class_weights, cfg):
                 print(f"  🛑 Early stopping on Fold {fold} at Epoch {epoch+1}")
                 break
                 
+    if run:
+        run.finish()
     return best_f1, model_path
 
 @torch.no_grad()
-def inference_ensemble(exp_dir, cfg):
-    """5-Fold 학습 모델들을 사용한 Logit 평균 앙상블 추론"""
-    print('\n' + '='*50)
-    print('🚀 5-Fold 앙상블 추론 시작')
-    print('='*50)
+def ultimate_inference_ensemble(cfg):
+    """TTA를 통합한 이종 모델 앙상블 추론"""
+    print('\n' + '='*70)
+    print('🚀 최종 TTA 통합 앙상블 추론 시작')
+    print('='*70)
 
     test_df = pd.read_csv(f'{cfg.DATA_DIR}/sample_submission.csv')
     test_df = test_df.drop('target', axis=1, errors='ignore')
     
-    test_dataset = DocumentDataset(test_df, f'{cfg.DATA_DIR}/test', get_transforms('test', cfg), is_test=True)
-    test_loader = DataLoader(test_dataset, batch_size=cfg.BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
-
-    model_paths = sorted(glob.glob(os.path.join(exp_dir, 'best_model_fold_*.pth')))
-    if not model_paths:
-        raise FileNotFoundError(f"모델 파일이 '{exp_dir}'에서 발견되지 않았습니다. 학습을 먼저 진행하세요.")
-        
-    print(f"앙상블에 사용할 모델 수: {len(model_paths)}개")
-
+    all_model_paths = glob.glob(os.path.join(cfg.ENSEMBLE_MODEL_BASE_DIR, '*', 'best_model_fold_*.pth'))
+    
+    if not all_model_paths:
+        raise FileNotFoundError(f"'{cfg.ENSEMBLE_MODEL_BASE_DIR}' 폴더에서 모델 파일이 발견되지 않았습니다. 모든 전략을 실행하고 이 코드를 재실행하세요.")
+    
+    print(f"앙상블에 사용할 총 모델 수: {len(all_model_paths)}개")
+    
+    model_name_map = {
+        'tf_efficientnet_b4_ns': 'tf_efficientnet_b4_ns', 
+        'convnext_base.fb_in22k': 'convnext_base.fb_in22k', 
+        'tf_efficientnetv2_l.in21k_ft_in1k': 'tf_efficientnetv2_l.in21k_ft_in1k',
+    }
+    
     all_logits = np.zeros((len(test_df), cfg.NUM_CLASSES), dtype=np.float32)
     
-    for i, model_path in enumerate(model_paths):
-        print(f"▶️ 모델 {i+1}/{len(model_paths)} 추론 중...")
+    for i, model_path in enumerate(all_model_paths):
+        model_key = None
+        for key in model_name_map:
+            if key in model_path:
+                model_key = key
+                break
         
-        model = timm.create_model(cfg.MODEL_NAME, pretrained=False, num_classes=cfg.NUM_CLASSES)
-        model.load_state_dict(torch.load(model_path, map_location=cfg.DEVICE))
-        model.to(cfg.DEVICE)
-        model.eval()
-        
-        fold_logits = []
-        for images in tqdm(test_loader, desc=f'Inference Model {i+1}'):
-            images = images.to(cfg.DEVICE)
-            outputs = model(images)
-            fold_logits.append(outputs.cpu().numpy())
+        if model_key is None:
+            continue
+            
+        current_model = timm.create_model(model_key, pretrained=False, num_classes=cfg.NUM_CLASSES)
+        current_model.load_state_dict(torch.load(model_path, map_location=cfg.DEVICE))
+        current_model.to(cfg.DEVICE)
+        current_model.eval()
 
-        all_logits += np.concatenate(fold_logits, axis=0)
+        fold_logits_sum = np.zeros((len(test_df), cfg.NUM_CLASSES), dtype=np.float32)
         
-    avg_logits = all_logits / len(model_paths)
+        # 1. TTA를 적용하지 않은 기본 예측 (1회)
+        test_dataset_base = DocumentDataset(test_df, f'{cfg.DATA_DIR}/test', get_transforms('val_base', cfg), is_test=True)
+        test_loader_base = DataLoader(test_dataset_base, batch_size=cfg.BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
+
+        base_logits_list = []
+        for images in test_loader_base:
+            outputs = current_model(images.to(cfg.DEVICE))
+            base_logits_list.append(outputs.cpu().numpy())
+        fold_logits_sum += np.concatenate(base_logits_list, axis=0)
+        
+        # 2. TTA 적용 예측 (TTA_SIZE 회)
+        for tta_iter in range(cfg.TTA_SIZE):
+            test_dataset_tta = DocumentDataset(test_df, f'{cfg.DATA_DIR}/test', get_transforms('test', cfg), is_test=True)
+            test_loader_tta = DataLoader(test_dataset_tta, batch_size=cfg.BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
+            
+            tta_logits_list = []
+            for images in test_loader_tta:
+                outputs = current_model(images.to(cfg.DEVICE))
+                tta_logits_list.append(outputs.cpu().numpy())
+            
+            fold_logits_sum += np.concatenate(tta_logits_list, axis=0)
+
+        fold_avg_logits = fold_logits_sum / (cfg.TTA_SIZE + 1)
+        all_logits += fold_avg_logits
+        
+    avg_logits = all_logits / len(all_model_paths)
     predictions = np.argmax(avg_logits, axis=1)
 
     return test_df['ID'], predictions
@@ -341,64 +446,61 @@ def inference_ensemble(exp_dir, cfg):
 def main():
     cfg = Config()
     
-    # 1. 데이터 준비
     download_and_extract_data(cfg.DATA_DIR)
     
-    # 2. 실험 디렉토리 설정
     TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # 🔥 실험 디렉토리 이름에 해상도 추가
-    EXP_DIR = f'./experiments/{cfg.MODEL_NAME}_size{cfg.IMAGE_SIZE}_{TIMESTAMP}'
+    EXP_DIR = f'./experiments/{cfg.MODEL_NAME}_{TIMESTAMP}'
     Path(EXP_DIR).mkdir(parents=True, exist_ok=True)
     print(f"🧪 실험 디렉토리 생성: {EXP_DIR}")
     
-    # 3. 데이터 로드 및 가중치 계산
     train_df = pd.read_csv(f'{cfg.DATA_DIR}/train.csv')
     train_labels = train_df['target'].values
     class_weights = compute_class_weight('balanced', classes=np.unique(train_labels), y=train_labels)
     class_weights = torch.tensor(class_weights, dtype=torch.float32)
     print(f"⚖️ 클래스 가중치 계산 완료: {class_weights.numpy().round(3)}")
     
-    # 4. K-Fold 학습
+    # K-Fold 학습 (V4 모델 학습)
     skf = StratifiedKFold(n_splits=cfg.N_FOLDS, shuffle=True, random_state=42)
     fold_results = []
     
-    for fold, (train_idx, val_idx) in enumerate(skf.split(train_df['ID'], train_df['target'])):
+    for fold_idx, (train_idx, val_idx) in enumerate(skf.split(train_df['ID'], train_df['target'])):
         train_fold_df = train_df.iloc[train_idx].reset_index(drop=True)
         val_fold_df = train_df.iloc[val_idx].reset_index(drop=True)
         
-        best_f1, model_path = train_fold(fold, train_fold_df, val_fold_df, EXP_DIR, class_weights, cfg)
+        # 🔥 Fold 번호를 1부터 시작하도록 +1
+        fold_num = fold_idx + 1 
+        
+        best_f1, model_path = train_fold(fold_num, train_fold_df, val_fold_df, EXP_DIR, class_weights, cfg)
         
         fold_results.append({
-            'fold': fold,
+            'fold': fold_num, # 수정된 fold_num 사용
             'f1': best_f1,
             'model_path': model_path
         })
     
-    # 학습 결과 요약
     results_df = pd.DataFrame(fold_results)
     print(f'\n{"="*50}')
-    print('📊 최종 학습 결과 요약')
+    print(f'📊 V4 학습 결과 요약 - 모델: {cfg.MODEL_NAME}')
     print(f'{"="*50}')
     print(results_df[['fold', 'f1']].to_markdown(index=False))
     print(f'\n📌 CV 평균 F1: {results_df["f1"].mean():.4f}')
     
-    # 5. 테스트 추론 및 제출 파일 생성
-    test_ids, predictions = inference_ensemble(EXP_DIR, cfg)
+    # 5. 테스트 추론 및 최종 제출 파일 생성 (V1, V2, V3, V4 통합 앙상블)
+    test_ids, predictions = ultimate_inference_ensemble(cfg)
     
-    submission = pd.DataFrame({
-        'ID': test_ids,
-        'target': predictions
-    })
+    submission = pd.DataFrame({'ID': test_ids, 'target': predictions})
     
-    avg_f1 = results_df["f1"].mean()
-    submission_filename = f'submission_{TIMESTAMP}_ensemble_avgf1{avg_f1:.4f}.csv'
+    submission_filename = f'submission_{TIMESTAMP}_FINAL_ROBUST_ENSEMBLE.csv'
     submission_path = os.path.join(EXP_DIR, submission_filename)
     submission.to_csv(submission_path, index=False)
     
-    print('\n' + '='*50)
-    print("✨ 모든 프로세스 완료!")
+    total_models = len(glob.glob(os.path.join(cfg.ENSEMBLE_MODEL_BASE_DIR, '*', 'best_model_fold_*.pth')))
+    
+    print('\n' + '='*70)
+    print("✨ 최종 앙상블 제출 파일 생성 완료!")
+    print(f"앙상블에 포함된 전체 모델 수: {total_models}개")
     print(f"최종 제출 파일 경로: {submission_path}")
-    print('='*50)
+    print('='*70)
 
 if __name__ == '__main__':
     main()

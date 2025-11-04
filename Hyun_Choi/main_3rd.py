@@ -54,7 +54,7 @@ class Config:
     GRADIENT_ACCUMULATION_STEPS = 4
     
     # 정규화 및 최적화
-    N_FOLDS = 5 
+    N_FOLDS = 5
     WEIGHT_DECAY = 0.05
     LABEL_SMOOTHING = 0.05
     
