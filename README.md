@@ -1,6 +1,8 @@
 # CV 6조
 ## Keep Going!!
 
+[![CI](https://github.com/AIBootcamp16/upstage-cv-classification-cv-6/actions/workflows/ci.yml/badge.svg)](https://github.com/AIBootcamp16/upstage-cv-classification-cv-6/actions/workflows/ci.yml)
+
 | ![박패캠](https://avatars.githubusercontent.com/u/156163982?v=4) | ![이패캠](https://avatars.githubusercontent.com/u/156163982?v=4) | ![최패캠](https://avatars.githubusercontent.com/u/156163982?v=4) | ![김패캠](https://avatars.githubusercontent.com/u/156163982?v=4) | ![오패캠](https://avatars.githubusercontent.com/u/156163982?v=4) |
 | :--------------------------------------------------------------: | :--------------------------------------------------------------: | :--------------------------------------------------------------: | :--------------------------------------------------------------: | :--------------------------------------------------------------: |
 |            [문서연](https://github.com/UpstageAILab)             |            [최현](https://github.com/UpstageAILab)             |            [김수현](https://github.com/UpstageAILab)             |            [이승호](https://github.com/UpstageAILab)             |            [오정택](https://github.com/UpstageAILab)             |
