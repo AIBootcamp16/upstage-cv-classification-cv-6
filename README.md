@@ -8,21 +8,25 @@
 
 ## 0. Overview
 ### Environment
-- _Write Development environment_
+- <img width="322" height="188" alt="image" src="https://github.com/user-attachments/assets/97a3313b-36fe-4bc5-a77e-e75afa295b45" />
+
 
 ### Requirements
-- _Write Requirements_
+- <img width="231" height="217" alt="image" src="https://github.com/user-attachments/assets/763e03cb-4beb-4ff1-87f4-bc31011a8c9c" />
+
 
 ## 1. Competiton Info
 
 ### Overview
 
-- _Write competition information_
+- 이번 대회는 문서 타입 분류를 위한 이미지 분류 대회입니다. 문서 데이터는 금융, 의료, 보험, 물류 등 산업 전반에 가장 많은 데이터이며, 많은 대기업에서 디지털 혁신을 위해 문서 유형을 분류하고자 합니다. 이러한 문서 타입 분류는 의료, 금융 등 여러 비즈니스 분야에서 대량의 문서 이미지를 식별하고 자동화 처리를 가능케 할 수 있습니다.
+
+이번 대회에 사용될 데이터는 총 17개 종의 문서로 분류되어 있습니다. 1570장의 학습 이미지를 통해 3140장의 평가 이미지를 예측하게 됩니다. 특히, 현업에서 사용하는 실 데이터를 기반으로 대회를 제작하여 대회와 현업의 갭을 최대한 줄였습니다. 또한 현업에서 생길 수 있는 여러 문서 상태에 대한 이미지를 구축하였습니다.
 
 ### Timeline
 
-- ex) January 10, 2024 - Start Date
-- ex) February 10, 2024 - Final submission deadline
+- 10월 31일 (금) 10:00 - Start Date
+- 11월 12일 (수) 19:00 - Final submission deadline
 
 ## 2. Components
 
@@ -34,7 +38,8 @@
 
 ### Dataset overview
 
-- _Explain using data_
+- <img width="374" height="138" alt="image" src="https://github.com/user-attachments/assets/7a7860c7-13c2-410d-bc60-c42674d8b703" />
+
 
 ### EDA
 
@@ -73,4 +78,4 @@
 
 ### Reference
 
-- _Insert related reference_
+- https://www.kaggle.com/
