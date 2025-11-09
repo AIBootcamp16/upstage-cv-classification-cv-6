@@ -38,8 +38,21 @@
 
 ### Dataset overview
 
-- <img width="374" height="138" alt="image" src="https://github.com/user-attachments/assets/7a7860c7-13c2-410d-bc60-c42674d8b703" />
+<img width="374" height="138" alt="image" src="https://github.com/user-attachments/assets/7a7860c7-13c2-410d-bc60-c42674d8b703" />
+학습 데이터셋 정보
+train [폴더] 1570장의 이미지가 저장되어 있습니다.
+train.csv [파일] 1570개의 행으로 이루어져 있습니다. train/ 폴더에 존재하는 1570개의 이미지에 대한 정답 클래스를 제공합니다.
+- ID: 학습 샘플의 파일명
+- target: 학습 샘플의 정답 클래스 번호
 
+meta.csv [파일] 17개의 행으로 이루어져 있습니다.
+- target: 17개의 클래스 번호입니다.
+- class_name: 클래스 번호에 대응하는 클래스 이름입니다.
+
+평가 데이터셋 정보
+test [폴더] 3140장의 이미지가 저장되어 있습니다.
+- ID: 평가 샘플의 파일명이 저장되어 있습니다.
+- target: 예측 결과가 입력될 컬럼입니다. 값이 전부 0으로 저장되어 있습니다.
 
 ### EDA
 
