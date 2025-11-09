@@ -8,11 +8,11 @@
 
 ## 0. Overview
 ### Environment
-- <img width="322" height="188" alt="image" src="https://github.com/user-attachments/assets/97a3313b-36fe-4bc5-a77e-e75afa295b45" />
+<img width="322" height="188" alt="image" src="https://github.com/user-attachments/assets/97a3313b-36fe-4bc5-a77e-e75afa295b45" />
 
 
 ### Requirements
-- <img width="231" height="217" alt="image" src="https://github.com/user-attachments/assets/763e03cb-4beb-4ff1-87f4-bc31011a8c9c" />
+<img width="231" height="217" alt="image" src="https://github.com/user-attachments/assets/763e03cb-4beb-4ff1-87f4-bc31011a8c9c" />
 
 
 ## 1. Competiton Info
@@ -25,8 +25,8 @@
 
 ### Timeline
 
-- 10월 31일 (금) 10:00 - Start Date
-- 11월 12일 (수) 19:00 - Final submission deadline
+- 2025년 10월 31일 (금) 10:00 - Start Date
+- 2025년 11월 12일 (수) 19:00 - Final submission deadline
 
 ## 2. Components
 
