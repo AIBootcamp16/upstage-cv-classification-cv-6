@@ -1,0 +1,216 @@
+{
+  "train": {
+    "class_distribution": {
+      "0": 100,
+      "1": 46,
+      "2": 100,
+      "3": 100,
+      "4": 100,
+      "5": 100,
+      "6": 100,
+      "7": 100,
+      "8": 100,
+      "9": 100,
+      "10": 100,
+      "11": 100,
+      "12": 100,
+      "13": 74,
+      "14": 50,
+      "15": 100,
+      "16": 100
+    },
+    "dimensions": {
+      "width": {
+        "mean": 499.374,
+        "std": 77.85888596685673
+      },
+      "height": {
+        "mean": 535.95,
+        "std": 75.41018167329926
+      },
+      "aspect_ratio": {
+        "mean": 0.9758355947288022,
+        "std": 0.31464006382490506
+      }
+    },
+    "brightness": {
+      "mean": 147.60215139862504,
+      "std": 36.22439156921142
+    },
+    "contrast": {
+      "mean": 47.08383357271337,
+      "std": 18.947508307265373
+    },
+    "orientation": {
+      "portrait": 321,
+      "landscape": 176,
+      "square": 3
+    },
+    "per_class_stats": {
+      "0": {
+        "name": "account_number",
+        "avg_width": 517.0,
+        "avg_height": 517.0,
+        "avg_brightness": 149.472168303331,
+        "samples_analyzed": 10
+      },
+      "1": {
+        "name": "application_for_payment_of_pregnancy_medical_expenses",
+        "avg_width": 443.0,
+        "avg_height": 591.0,
+        "avg_brightness": 163.0875097875201,
+        "samples_analyzed": 10
+      },
+      "2": {
+        "name": "car_dashboard",
+        "avg_width": 576.2,
+        "avg_height": 457.8,
+        "avg_brightness": 65.78031992299847,
+        "samples_analyzed": 10
+      },
+      "3": {
+        "name": "confirmation_of_admission_and_discharge",
+        "avg_width": 443.0,
+        "avg_height": 591.0,
+        "avg_brightness": 164.9450703364615,
+        "samples_analyzed": 10
+      },
+      "4": {
+        "name": "diagnosis",
+        "avg_width": 443.0,
+        "avg_height": 591.0,
+        "avg_brightness": 164.61290463040413,
+        "samples_analyzed": 10
+      },
+      "5": {
+        "name": "driver_lisence",
+        "avg_width": 625.3,
+        "avg_height": 419.1,
+        "avg_brightness": 117.27398371718175,
+        "samples_analyzed": 10
+      },
+      "6": {
+        "name": "medical_bill_receipts",
+        "avg_width": 505.6,
+        "avg_height": 527.5,
+        "avg_brightness": 169.92641938256074,
+        "samples_analyzed": 10
+      },
+      "7": {
+        "name": "medical_outpatient_certificate",
+        "avg_width": 443.0,
+        "avg_height": 591.0,
+        "avg_brightness": 166.19800009930754,
+        "samples_analyzed": 10
+      },
+      "8": {
+        "name": "national_id_card",
+        "avg_width": 602.6,
+        "avg_height": 439.9,
+        "avg_brightness": 125.42767252723904,
+        "samples_analyzed": 10
+      },
+      "9": {
+        "name": "passport",
+        "avg_width": 609.5,
+        "avg_height": 429.6,
+        "avg_brightness": 137.50072447991724,
+        "samples_analyzed": 10
+      },
+      "10": {
+        "name": "payment_confirmation",
+        "avg_width": 443.0,
+        "avg_height": 591.0,
+        "avg_brightness": 172.48003116728353,
+        "samples_analyzed": 10
+      },
+      "11": {
+        "name": "pharmaceutical_receipt",
+        "avg_width": 487.4,
+        "avg_height": 546.6,
+        "avg_brightness": 146.0015797534882,
+        "samples_analyzed": 10
+      },
+      "12": {
+        "name": "prescription",
+        "avg_width": 443.0,
+        "avg_height": 591.0,
+        "avg_brightness": 164.81094025124804,
+        "samples_analyzed": 10
+      },
+      "13": {
+        "name": "resume",
+        "avg_width": 443.0,
+        "avg_height": 591.0,
+        "avg_brightness": 167.2160549705324,
+        "samples_analyzed": 10
+      },
+      "14": {
+        "name": "statement_of_opinion",
+        "avg_width": 443.0,
+        "avg_height": 591.0,
+        "avg_brightness": 168.49663232918152,
+        "samples_analyzed": 10
+      },
+      "15": {
+        "name": "vehicle_registration_certificate",
+        "avg_width": 443.0,
+        "avg_height": 591.0,
+        "avg_brightness": 156.25036648294775,
+        "samples_analyzed": 10
+      },
+      "16": {
+        "name": "vehicle_registration_plate",
+        "avg_width": 517.0,
+        "avg_height": 517.0,
+        "avg_brightness": 103.9222189119715,
+        "samples_analyzed": 10
+      }
+    }
+  },
+  "test": {
+    "dimensions": {
+      "width": {
+        "mean": 512.626,
+        "std": 78.68714077916417
+      },
+      "height": {
+        "mean": 522.694,
+        "std": 78.50342899517193
+      },
+      "aspect_ratio": {
+        "mean": 1.0274837730616113,
+        "std": 0.31290967939120173
+      }
+    },
+    "brightness": {
+      "mean": 174.27508526056556,
+      "std": 35.468056040766534
+    },
+    "contrast": {
+      "mean": 47.809927939349,
+      "std": 19.027322251955493
+    },
+    "orientation": {
+      "portrait": 267,
+      "landscape": 230,
+      "square": 3
+    }
+  },
+  "recommendations": [
+    "HIGH CLASS IMBALANCE (ratio 2.17:1) - Consider class weights or balanced sampling",
+    "DISTRIBUTION SHIFT: Brightness difference (26.7) - Apply strong brightness augmentation"
+  ],
+  "augmentation_config": {
+    "rotation_range": "\u00b17 degrees",
+    "brightness_limit": "\u00b10.14",
+    "contrast_limit": "\u00b10.07",
+    "perspective_prob": 0.35,
+    "grid_distortion_prob": 0.35,
+    "affine_translate": "\u00b16%",
+    "affine_scale": "(0.92, 1.08)",
+    "mixup_prob": 0.3,
+    "cutmix_prob": 0.0,
+    "augraphy_prob": 0.4
+  }
+}

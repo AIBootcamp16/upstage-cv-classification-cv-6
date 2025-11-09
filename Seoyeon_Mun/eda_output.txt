@@ -1,0 +1,160 @@
+Starting comprehensive EDA analysis...
+This may take several minutes...
+
+============================================================
+CLASS DISTRIBUTION ANALYSIS
+============================================================
+Class  0 (account_number                                    ):  100 images
+Class  1 (application_for_payment_of_pregnancy_medical_expenses):   46 images
+Class  2 (car_dashboard                                     ):  100 images
+Class  3 (confirmation_of_admission_and_discharge           ):  100 images
+Class  4 (diagnosis                                         ):  100 images
+Class  5 (driver_lisence                                    ):  100 images
+Class  6 (medical_bill_receipts                             ):  100 images
+Class  7 (medical_outpatient_certificate                    ):  100 images
+Class  8 (national_id_card                                  ):  100 images
+Class  9 (passport                                          ):  100 images
+Class 10 (payment_confirmation                              ):  100 images
+Class 11 (pharmaceutical_receipt                            ):  100 images
+Class 12 (prescription                                      ):  100 images
+Class 13 (resume                                            ):   74 images
+Class 14 (statement_of_opinion                              ):   50 images
+Class 15 (vehicle_registration_certificate                  ):  100 images
+Class 16 (vehicle_registration_plate                        ):  100 images
+
+Total training images: 1570
+Min samples per class: 46
+Max samples per class: 100
+Mean samples per class: 92.4
+Std samples per class: 17.8
+
+Class imbalance ratio: 2.17:1
+
+============================================================
+TRAIN IMAGE PROPERTIES ANALYSIS
+============================================================
+Analyzing 500 images...
+  0%|          | 0/500 [00:00<?, ?it/s] 10%|▉         | 48/500 [00:00<00:00, 472.13it/s] 19%|█▉        | 96/500 [00:00<00:00, 474.02it/s] 29%|██▉       | 144/500 [00:00<00:00, 471.11it/s] 39%|███▊      | 193/500 [00:00<00:00, 477.13it/s] 48%|████▊     | 242/500 [00:00<00:00, 481.38it/s] 58%|█████▊    | 291/500 [00:00<00:00, 483.22it/s] 68%|██████▊   | 340/500 [00:00<00:00, 478.53it/s] 78%|███████▊  | 388/500 [00:00<00:00, 476.46it/s] 88%|████████▊ | 438/500 [00:00<00:00, 480.33it/s] 97%|█████████▋| 487/500 [00:01<00:00, 483.08it/s]100%|██████████| 500/500 [00:01<00:00, 480.02it/s]
+
+Image Dimensions:
+  Width:  499.4 ± 77.9 (min: 428, max: 734)
+  Height: 536.0 ± 75.4 (min: 356, max: 612)
+
+Aspect Ratio: 0.976 ± 0.315
+
+Orientation Distribution:
+  portrait  :  321 (64.2%)
+  landscape :  176 (35.2%)
+  square    :    3 (0.6%)
+
+Brightness: 147.6 ± 36.2
+Contrast:   47.1 ± 18.9
+
+Color Distribution (BGR):
+  R: 145.9 ± 35.3
+  G: 148.2 ± 36.8
+  B: 149.3 ± 37.4
+
+File Size: 77.3 ± 21.2 KB
+
+============================================================
+TEST IMAGE PROPERTIES ANALYSIS
+============================================================
+Analyzing 500 images...
+  0%|          | 0/500 [00:00<?, ?it/s]  9%|▉         | 47/500 [00:00<00:00, 467.81it/s] 19%|█▉        | 95/500 [00:00<00:00, 473.97it/s] 29%|██▊       | 143/500 [00:00<00:00, 476.11it/s] 38%|███▊      | 191/500 [00:00<00:00, 476.44it/s] 48%|████▊     | 239/500 [00:00<00:00, 476.96it/s] 57%|█████▋    | 287/500 [00:00<00:00, 476.82it/s] 67%|██████▋   | 335/500 [00:00<00:00, 476.92it/s] 77%|███████▋  | 383/500 [00:00<00:00, 474.36it/s] 86%|████████▌ | 431/500 [00:00<00:00, 473.52it/s] 96%|█████████▌| 479/500 [00:01<00:00, 471.87it/s]100%|██████████| 500/500 [00:01<00:00, 474.57it/s]
+
+Image Dimensions:
+  Width:  512.6 ± 78.7 (min: 382, max: 682)
+  Height: 522.7 ± 78.5 (min: 383, max: 685)
+
+Aspect Ratio: 1.027 ± 0.313
+
+Orientation Distribution:
+  portrait  :  267 (53.4%)
+  landscape :  230 (46.0%)
+  square    :    3 (0.6%)
+
+Brightness: 174.3 ± 35.5
+Contrast:   47.8 ± 19.0
+
+Color Distribution (BGR):
+  R: 173.4 ± 35.5
+  G: 174.6 ± 35.6
+  B: 175.0 ± 35.3
+
+File Size: 84.8 ± 20.2 KB
+
+============================================================
+PER-CLASS CHARACTERISTICS ANALYSIS
+============================================================
+
+Class Name                                               Avg W x H       Brightness  
+------------------------------------------------------------------------------------------
+0     account_number                                        517x517       149.5
+1     application_for_payment_of_pregnancy_medical_expenses    443x591       163.1
+2     car_dashboard                                         576x458        65.8
+3     confirmation_of_admission_and_discharge               443x591       164.9
+4     diagnosis                                             443x591       164.6
+5     driver_lisence                                        625x419       117.3
+6     medical_bill_receipts                                 506x528       169.9
+7     medical_outpatient_certificate                        443x591       166.2
+8     national_id_card                                      603x440       125.4
+9     passport                                              610x430       137.5
+10    payment_confirmation                                  443x591       172.5
+11    pharmaceutical_receipt                                487x547       146.0
+12    prescription                                          443x591       164.8
+13    resume                                                443x591       167.2
+14    statement_of_opinion                                  443x591       168.5
+15    vehicle_registration_certificate                      443x591       156.3
+16    vehicle_registration_plate                            517x517       103.9
+
+============================================================
+TRAIN vs TEST COMPARISON
+============================================================
+
+Dimensions:
+  Train - Width: 499.4, Height: 536.0
+  Test  - Width: 512.6, Height: 522.7
+
+Brightness:
+  Train: 147.6 ± 36.2
+  Test:  174.3 ± 35.5
+
+Contrast:
+  Train: 47.1 ± 18.9
+  Test:  47.8 ± 19.0
+
+============================================================
+AUGMENTATION STRATEGY RECOMMENDATIONS
+============================================================
+
+Based on the analysis:
+1. HIGH CLASS IMBALANCE (ratio 2.17:1) - Consider class weights or balanced sampling
+2. DISTRIBUTION SHIFT: Brightness difference (26.7) - Apply strong brightness augmentation
+
+Document-specific recommendations:
+1. ROTATION: Documents can be slightly rotated (±7°) but avoid extreme rotations
+2. PERSPECTIVE: Apply perspective transform (p=0.3-0.4) for camera angle variations
+3. BRIGHTNESS/CONTRAST: Strong augmentation needed based on variance
+4. GRID DISTORTION: Useful for scanner artifacts (p=0.3)
+5. NOISE: Add Gaussian/Motion blur for print quality variations
+6. COLOR: Minimal color jitter (documents are usually neutral)
+7. AUGRAPHY: Document-specific degradations are valuable
+
+Recommended augmentation parameters:
+  rotation_range           : ±7 degrees
+  brightness_limit         : ±0.14
+  contrast_limit           : ±0.07
+  perspective_prob         : 0.35
+  grid_distortion_prob     : 0.35
+  affine_translate         : ±6%
+  affine_scale             : (0.92, 1.08)
+  mixup_prob               : 0.3
+  cutmix_prob              : 0.0
+  augraphy_prob            : 0.4
+
+Results saved to: /root/upstage-cv-classification-cv-6/Seoyeon_Mun/eda_results.json
+
+============================================================
+EDA ANALYSIS COMPLETE
+============================================================
