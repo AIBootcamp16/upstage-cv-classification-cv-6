@@ -2,8 +2,13 @@ name: CI - Python tests
 
 on:
   push:
+    paths-ignore:        # 👈 이 3줄 추가
+        - '**.md'
+        - 'README.md'
   pull_request:
-
+    paths-ignore:        # 👈 이 3줄 추가
+        - '**.md'
+        - 'README.md'
 jobs:
   test:
     runs-on: ubuntu-latest

@@ -12,7 +12,7 @@ from albumentations.pytorch import ToTensorV2
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold, train_test_split
 from sklearn.metrics import f1_score
 from sklearn.utils.class_weight import compute_class_weight
 import os
@@ -108,43 +108,48 @@ class Config:
         self.TRAIN_DIR = 'data/train'
         self.TEST_DIR = 'data/test'
 
-        self.MODEL_NAME = 'tf_efficientnetv2_m'
-        self.IMG_SIZE = 384
+        self.MODEL_NAME = 'tf_efficientnet_b4'
+        self.IMG_SIZE = 380
         self.NUM_CLASSES = 17
 
-        self.BATCH_SIZE = 12
+        self.BATCH_SIZE = 16
         self.VAL_BATCH_SIZE = 32
         self.TEST_BATCH_SIZE = 32
         self.TRAIN_WORKERS = 4
         self.EVAL_WORKERS = 4
-        self.ACCUMULATION_STEPS = 4
-        self.EPOCHS = 20
-        self.LR = 3e-4
+        self.ACCUMULATION_STEPS = 3
+        self.EPOCHS = 25
+        self.LR = 2e-4
         self.N_FOLDS = 5
 
-        self.DROPOUT_RATE = 0.5
-        self.WEIGHT_DECAY = 0.05
-        self.LABEL_SMOOTHING = 0.1
+        self.DROPOUT_RATE = 0.4
+        self.DROP_PATH_RATE = 0.1
+        self.WEIGHT_DECAY = 0.07
+        self.LABEL_SMOOTHING = 0.08
         self.PATIENCE = 5
+        self.USE_HOLDOUT = True
+        self.HOLDOUT_RATIO = 0.12
+        self.HOLDOUT_RANDOM_STATE = 42
+        self.USE_GROUP_KFOLD = False
 
         # 증강 & 정규화 옵션
-        self.AUG_STRATEGY = 'hybrid'
-        self.AUGRAPHY_STRENGTH = 'medium'
+        self.AUG_STRATEGY = 'albumentations'
+        self.AUGRAPHY_STRENGTH = 'light'
         self.AUG_PERSPECTIVE = True
-        self.AUG_PERSPECTIVE_SCALE = (0.03, 0.07)
+        self.AUG_PERSPECTIVE_SCALE = (0.02, 0.05)
         self.AUG_GRID_DISTORTION = True
-        self.AUG_GRID_NUM_STEPS = 5
+        self.AUG_GRID_NUM_STEPS = 4
         self.AUG_COARSE_DROPOUT = True
-        self.AUG_COARSE_PARAMS = dict(max_holes=6, max_height=32, max_width=32, fill_value=255)
+        self.AUG_COARSE_PARAMS = dict(max_holes=3, max_height=24, max_width=24, fill_value=255)
         self.AUG_COLOR_JITTER = True
 
         # Mixup / CutMix
         self.USE_MIXUP = True
-        self.MIXUP_ALPHA = 0.4
-        self.MIXUP_PROB = 0.5
-        self.USE_CUTMIX = True
+        self.MIXUP_ALPHA = 0.2
+        self.MIXUP_PROB = 0.3
+        self.USE_CUTMIX = False
         self.CUTMIX_ALPHA = 1.0
-        self.CUTMIX_PROB = 0.5
+        self.CUTMIX_PROB = 0.0
 
         self.MAX_GRAD_NORM = 1.0
         self.SCHEDULER = 'cosine'
@@ -158,7 +163,10 @@ class Config:
             'mps' if torch.backends.mps.is_available() else 'cpu'
         )
         self.USE_AMP = torch.cuda.is_available()
+        self.USE_EMA = False
+        self.EMA_DECAY = 0.999
         self.TTA_HORIZONTAL_FLIP = True
+        self.RAISE_ON_IMAGE_ERROR = True
 
     def print_config(self):
         print('=' * 70)
@@ -173,7 +181,9 @@ class Config:
         )
         print(f'에폭: {self.EPOCHS}, 학습률: {self.LR}')
         print(f'Fold 수: {self.N_FOLDS}, Patience: {self.PATIENCE}')
-        print(f'Dropout: {self.DROPOUT_RATE}, Weight Decay: {self.WEIGHT_DECAY}')
+        print(f'Dropout: {self.DROPOUT_RATE}, Drop Path: {self.DROP_PATH_RATE}, Weight Decay: {self.WEIGHT_DECAY}')
+        print(f'Label Smoothing: {self.LABEL_SMOOTHING}')
+        print(f'EMA: {self.USE_EMA} (decay={self.EMA_DECAY})')
         print(f'Scheduler: {self.SCHEDULER} (step: {self.SCHEDULER_STEP})')
         print(
             f'Mixup: {self.USE_MIXUP} (alpha={self.MIXUP_ALPHA}, prob={self.MIXUP_PROB}) | '
@@ -188,6 +198,7 @@ class Config:
         )
         print(f'AMP 사용: {self.USE_AMP} | 디바이스: {self.DEVICE}')
         print(f'Max Grad Norm: {self.MAX_GRAD_NORM}')
+        print(f'Hold-out 사용: {self.USE_HOLDOUT} (ratio={self.HOLDOUT_RATIO})')
         print('=' * 70)
 
 
@@ -219,7 +230,7 @@ def set_seed(seed=42):
 def get_albumentations_train(cfg):
     transforms = [
         A.Resize(cfg.IMG_SIZE, cfg.IMG_SIZE),
-        A.Affine(translate_percent=0.04, scale=(0.94, 1.06), shear=(-3, 3), rotate=(-5, 5), p=0.4),
+        A.Affine(translate_percent=0.04, scale=(0.94, 1.06), shear=(-5, 5), rotate=(-5, 5), p=0.4),
     ]
 
     if cfg.AUG_PERSPECTIVE:
@@ -232,12 +243,16 @@ def get_albumentations_train(cfg):
 
     transforms.extend(
         [
-            A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.2, p=0.5),
-            A.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.02, p=0.4)
+            A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.2, p=0.4),
+            A.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.02, p=0.3)
             if cfg.AUG_COLOR_JITTER
             else A.NoOp(),
-            A.GaussNoise(var_limit=(10.0, 40.0), p=0.3),
+            A.GaussNoise(var_limit=(10.0, 30.0), p=0.25),
             A.GaussianBlur(blur_limit=(3, 5), p=0.15),
+            A.OneOf([
+                A.MotionBlur(blur_limit=3, p=1.0),
+                A.MedianBlur(blur_limit=3, p=1.0),
+            ], p=0.1),
         ]
     )
 
@@ -248,7 +263,7 @@ def get_albumentations_train(cfg):
                 max_height=cfg.AUG_COARSE_PARAMS['max_height'],
                 max_width=cfg.AUG_COARSE_PARAMS['max_width'],
                 fill_value=cfg.AUG_COARSE_PARAMS['fill_value'],
-                p=0.25,
+                p=0.2,
             )
         )
 
@@ -338,7 +353,38 @@ def get_train_transform(cfg):
 
 
 # ==============================================================================
-# 6. 학습 유틸 (Mixup / CutMix)
+# 6. EMA (Exponential Moving Average)
+# ==============================================================================
+
+
+class ModelEMA:
+    """Model Exponential Moving Average"""
+
+    def __init__(self, model, decay=0.9999, device='cuda'):
+        self.module = model
+        self.decay = decay
+        self.device = device
+        self.ema = {k: v.clone().detach() for k, v in model.state_dict().items()}
+
+    @torch.no_grad()
+    def update(self, model):
+        for k, v in model.state_dict().items():
+            if v.dtype.is_floating_point:
+                self.ema[k].mul_(self.decay).add_(v.to(self.device), alpha=1 - self.decay)
+            else:
+                self.ema[k].copy_(v.to(self.device))
+
+    def apply_shadow(self):
+        self.backup = {k: v.clone() for k, v in self.module.state_dict().items()}
+        self.module.load_state_dict(self.ema)
+
+    def restore(self):
+        self.module.load_state_dict(self.backup)
+        del self.backup
+
+
+# ==============================================================================
+# 7. 학습 유틸 (Mixup / CutMix)
 # ==============================================================================
 
 
@@ -383,8 +429,8 @@ def cutmix_data(images, labels, alpha):
 
 
 def apply_mix_strategy(images, labels, cfg):
-    use_mixup = cfg.USE_MIXUP and random.random() < cfg.MIXUP_PROB
-    use_cutmix = cfg.USE_CUTMIX and random.random() < cfg.CUTMIX_PROB
+    use_mixup = cfg.USE_MIXUP and cfg.MIXUP_PROB > 0 and random.random() < cfg.MIXUP_PROB
+    use_cutmix = cfg.USE_CUTMIX and cfg.CUTMIX_PROB > 0 and random.random() < cfg.CUTMIX_PROB
 
     if use_cutmix:
         return cutmix_data(images, labels, cfg.CUTMIX_ALPHA), 'cutmix'
@@ -433,11 +479,12 @@ def build_scheduler(optimizer, cfg, steps_per_epoch):
 
 
 class DocumentDataset(Dataset):
-    def __init__(self, df, img_dir, transform=None, is_test=False):
+    def __init__(self, df, img_dir, transform=None, is_test=False, raise_on_error=False):
         self.df = df.reset_index(drop=True)
         self.img_dir = Path(img_dir)
         self.transform = transform
         self.is_test = is_test
+        self.raise_on_error = raise_on_error
 
     def __len__(self):
         return len(self.df)
@@ -450,6 +497,8 @@ class DocumentDataset(Dataset):
             image = Image.open(img_path).convert('RGB')
             image = np.array(image)
         except Exception as e:
+            if self.raise_on_error:
+                raise
             print(f"⚠️  Error loading {img_path}: {e}")
             image = np.zeros((224, 224, 3), dtype=np.uint8)
 
@@ -468,7 +517,7 @@ class DocumentDataset(Dataset):
 # ==============================================================================
 
 
-def train_epoch(model, loader, criterion, optimizer, scheduler, scheduler_step_mode, scaler, cfg, epoch):
+def train_epoch(model, loader, criterion, optimizer, scheduler, scheduler_step_mode, scaler, cfg, epoch, ema=None):
     model.train()
     losses = []
     optimizer.zero_grad()
@@ -509,6 +558,9 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, scheduler_step_m
             else:
                 optimizer.step()
 
+            if ema is not None:
+                ema.update(model)
+
             optimizer.zero_grad()
 
             if scheduler is not None and scheduler_step_mode == 'batch':
@@ -547,8 +599,18 @@ def train_fold(fold, train_df, val_df, exp_dir, class_weights, cfg):
     print(f'Fold {fold} 학습 시작')
     print(f"{'=' * 50}")
 
-    train_dataset = DocumentDataset(train_df, cfg.TRAIN_DIR, get_train_transform(cfg))
-    val_dataset = DocumentDataset(val_df, cfg.TRAIN_DIR, get_val_transform(cfg))
+    train_dataset = DocumentDataset(
+        train_df,
+        cfg.TRAIN_DIR,
+        get_train_transform(cfg),
+        raise_on_error=cfg.RAISE_ON_IMAGE_ERROR,
+    )
+    val_dataset = DocumentDataset(
+        val_df,
+        cfg.TRAIN_DIR,
+        get_val_transform(cfg),
+        raise_on_error=cfg.RAISE_ON_IMAGE_ERROR,
+    )
 
     pin_memory = 'cuda' in cfg.DEVICE
     train_loader = DataLoader(
@@ -568,33 +630,64 @@ def train_fold(fold, train_df, val_df, exp_dir, class_weights, cfg):
         persistent_workers=cfg.EVAL_WORKERS > 0,
     )
 
-    model = timm.create_model(cfg.MODEL_NAME, pretrained=True, num_classes=cfg.NUM_CLASSES, drop_rate=cfg.DROPOUT_RATE)
+    # ResNet은 drop_rate, drop_path_rate 파라미터를 지원하지 않음
+    if 'resnet' in cfg.MODEL_NAME.lower():
+        model = timm.create_model(
+            cfg.MODEL_NAME,
+            pretrained=True,
+            num_classes=cfg.NUM_CLASSES
+        )
+        print(f'✅ 모델 로드: {cfg.MODEL_NAME}')
+    else:
+        model = timm.create_model(
+            cfg.MODEL_NAME,
+            pretrained=True,
+            num_classes=cfg.NUM_CLASSES,
+            drop_rate=cfg.DROPOUT_RATE,
+            drop_path_rate=cfg.DROP_PATH_RATE
+        )
+        print(f'✅ 모델 로드: {cfg.MODEL_NAME} (dropout={cfg.DROPOUT_RATE}, drop_path={cfg.DROP_PATH_RATE})')
+
     model = model.to(cfg.DEVICE)
-    print(f'✅ 모델 로드: {cfg.MODEL_NAME}')
 
     optimizer = optim.AdamW(model.parameters(), lr=cfg.LR, weight_decay=cfg.WEIGHT_DECAY)
     scaler = GradScaler(enabled=cfg.USE_AMP and 'cuda' in cfg.DEVICE)
     scheduler, scheduler_step_mode = build_scheduler(optimizer, cfg, len(train_loader))
 
+    ema = None
+    if cfg.USE_EMA:
+        ema = ModelEMA(model, decay=cfg.EMA_DECAY, device=cfg.DEVICE)
+        print(f'✅ EMA 활성화 (decay={cfg.EMA_DECAY})')
+
     if cfg.USE_CLASS_WEIGHTS and class_weights is not None:
-        criterion = nn.CrossEntropyLoss(weight=class_weights.to(cfg.DEVICE), label_smoothing=cfg.LABEL_SMOOTHING)
+        class_weights = class_weights.to(cfg.DEVICE)
+        criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=cfg.LABEL_SMOOTHING)
     else:
         criterion = nn.CrossEntropyLoss(label_smoothing=cfg.LABEL_SMOOTHING)
 
     best_f1 = 0.0
     best_model_state = None
+    best_ema_state = None
     patience_counter = 0
 
     for epoch in range(cfg.EPOCHS):
-        train_loss = train_epoch(model, train_loader, criterion, optimizer, scheduler, scheduler_step_mode, scaler, cfg, epoch)
+        train_loss = train_epoch(model, train_loader, criterion, optimizer, scheduler, scheduler_step_mode, scaler, cfg, epoch, ema)
+
+        # Validate with EMA
+        if ema is not None:
+            ema.apply_shadow()
         val_f1 = validate(model, val_loader, cfg)
+        if ema is not None:
+            ema.restore()
 
         current_lr = optimizer.param_groups[0]['lr']
-        print(f'Epoch {epoch + 1}/{cfg.EPOCHS} - Loss: {train_loss:.4f}, F1: {val_f1:.4f}, LR: {current_lr:.6f}')
+        print(f'Epoch {epoch + 1}/{cfg.EPOCHS} | Train Loss: {train_loss:.4f} | Val F1: {val_f1:.4f} | LR: {current_lr:.6f}')
 
         if val_f1 > best_f1:
             best_f1 = val_f1
             best_model_state = model.state_dict().copy()
+            if ema is not None:
+                best_ema_state = ema.ema.copy()
             patience_counter = 0
             print(f'✅ Best F1: {best_f1:.4f}')
         else:
@@ -616,10 +709,18 @@ def train_fold(fold, train_df, val_df, exp_dir, class_weights, cfg):
 
     if best_model_state is None:
         best_model_state = model.state_dict()
+        if ema is not None:
+            best_ema_state = ema.ema
 
-    model_filename = f'{exp_dir}/models/fold{fold}_{TIMESTAMP}_f1{best_f1:.4f}.pth'
-    torch.save(best_model_state, model_filename)
-    print(f'\nFold {fold} 완료 - Best F1: {best_f1:.4f}')
+    # Save EMA model if available, otherwise save regular model
+    if best_ema_state is not None:
+        model_filename = f'{exp_dir}/models/fold{fold}_{TIMESTAMP}_f1{best_f1:.4f}.pth'
+        torch.save(best_ema_state, model_filename)
+        print(f'\nFold {fold} 완료 - Best F1: {best_f1:.4f} (EMA 모델 저장)')
+    else:
+        model_filename = f'{exp_dir}/models/fold{fold}_{TIMESTAMP}_f1{best_f1:.4f}.pth'
+        torch.save(best_model_state, model_filename)
+        print(f'\nFold {fold} 완료 - Best F1: {best_f1:.4f}')
 
     return best_f1, model_filename
 
@@ -634,7 +735,13 @@ def inference_ensemble(test_df, fold_info, cfg):
     print(f'추론 시작 (모델 {len(fold_info)}개)')
     print(f"{'=' * 50}")
 
-    test_dataset = DocumentDataset(test_df, cfg.TEST_DIR, get_val_transform(cfg), is_test=True)
+    test_dataset = DocumentDataset(
+        test_df,
+        cfg.TEST_DIR,
+        get_val_transform(cfg),
+        is_test=True,
+        raise_on_error=cfg.RAISE_ON_IMAGE_ERROR,
+    )
     pin_memory = 'cuda' in cfg.DEVICE
     test_loader = DataLoader(
         test_dataset,
@@ -656,7 +763,7 @@ def inference_ensemble(test_df, fold_info, cfg):
 
     avg_f1 = float(np.mean(fold_f1s))
 
-    ensemble_logits = torch.zeros(len(test_dataset), cfg.NUM_CLASSES, dtype=torch.float32)
+    ensemble_probs = torch.zeros(len(test_dataset), cfg.NUM_CLASSES, dtype=torch.float32)
     use_amp = cfg.USE_AMP and 'cuda' in cfg.DEVICE
 
     for (fold_idx, (fold, f1, model_path)) in enumerate(fold_info):
@@ -678,16 +785,87 @@ def inference_ensemble(test_df, fold_info, cfg):
                         flipped = torch.flip(images, dims=[-1])
                         logits = (logits + model(flipped)) * 0.5
 
-                batch_size = logits.size(0)
-                ensemble_logits[start_idx:start_idx + batch_size] += logits.cpu() * weights[fold_idx].item()
+                probs = torch.softmax(logits, dim=1).cpu()
+                batch_size = probs.size(0)
+                ensemble_probs[start_idx:start_idx + batch_size] += probs * weights[fold_idx].item()
                 start_idx += batch_size
 
         del model
         if 'cuda' in cfg.DEVICE:
             torch.cuda.empty_cache()
 
-    final_predictions = ensemble_logits.argmax(dim=1).numpy()
+    final_predictions = ensemble_probs.argmax(dim=1).numpy()
     return final_predictions.tolist(), avg_f1
+
+
+# ==============================================================================
+# 11-1. Hold-out 평가
+# ==============================================================================
+
+
+def evaluate_holdout(holdout_df, fold_info, cfg):
+    print(f"\n{'=' * 50}")
+    print(f'Hold-out 평가 (샘플 {len(holdout_df)}개)')
+    print(f"{'=' * 50}")
+
+    dataset = DocumentDataset(
+        holdout_df,
+        cfg.TRAIN_DIR,
+        get_val_transform(cfg),
+        is_test=False,
+        raise_on_error=cfg.RAISE_ON_IMAGE_ERROR,
+    )
+    pin_memory = 'cuda' in cfg.DEVICE
+    loader = DataLoader(
+        dataset,
+        batch_size=cfg.VAL_BATCH_SIZE,
+        shuffle=False,
+        num_workers=cfg.EVAL_WORKERS,
+        pin_memory=pin_memory,
+        persistent_workers=cfg.EVAL_WORKERS > 0,
+    )
+
+    fold_f1s = [f1 for _, f1, _ in fold_info]
+    weights = torch.tensor(fold_f1s, dtype=torch.float32)
+    if weights.sum().item() == 0:
+        weights = torch.ones_like(weights)
+    weights = weights / weights.sum()
+
+    preds_probs = np.zeros((len(holdout_df), cfg.NUM_CLASSES), dtype=np.float32)
+    labels = holdout_df['label'].values
+    use_amp = cfg.USE_AMP and 'cuda' in cfg.DEVICE
+
+    for fold_idx, (fold, f1, model_path) in enumerate(fold_info):
+        print(f'✅ Hold-out 평가 모델 로드: Fold {fold} (F1: {f1:.4f}) - {model_path}')
+        model = timm.create_model(cfg.MODEL_NAME, pretrained=False, num_classes=cfg.NUM_CLASSES)
+        state_dict = torch.load(model_path, map_location=cfg.DEVICE)
+        model.load_state_dict(state_dict)
+        del state_dict
+        model = model.to(cfg.DEVICE)
+        model.eval()
+
+        start_idx = 0
+        with torch.no_grad():
+            for images, batch_labels in tqdm(loader, desc=f'Hold-out Inference | Fold {fold}'):
+                images = images.to(cfg.DEVICE, non_blocking=True)
+                with autocast(enabled=use_amp):
+                    logits = model(images)
+                probs = torch.softmax(logits, dim=1).cpu().numpy()
+                batch_size = probs.shape[0]
+                preds_probs[start_idx:start_idx + batch_size] += probs * weights[fold_idx].item()
+                start_idx += batch_size
+
+        del model
+        if 'cuda' in cfg.DEVICE:
+            torch.cuda.empty_cache()
+
+    final_preds = preds_probs.argmax(axis=1)
+    f1 = f1_score(labels, final_preds, average='macro')
+    print(f'Hold-out Macro F1: {f1:.4f}')
+    print('\nHold-out 예측 분포:')
+    print(pd.Series(final_preds).value_counts().sort_index())
+    print('\nHold-out 실제 분포:')
+    print(pd.Series(labels).value_counts().sort_index())
 
 
 # ==============================================================================
@@ -734,24 +912,68 @@ if __name__ == '__main__':
     print('\n📂 데이터 로드 중...')
     train_df = pd.read_csv(f'{config.DATA_DIR}/train.csv')
     train_df['label'] = train_df['target']
+
+    meta_path = Path(config.DATA_DIR) / 'meta.csv'
+    if meta_path.exists():
+        meta_df = pd.read_csv(meta_path)
+        train_df = train_df.merge(meta_df, on='target', how='left')
+        if 'series_id' in meta_df.columns:
+            train_df['group'] = train_df['series_id']
+        else:
+            train_df['group'] = train_df['class_name']
+    else:
+        train_df['group'] = train_df['label']
+
+    if 'group' in train_df.columns:
+        train_df['group'] = train_df['group'].fillna(train_df['ID'])
+
     print(f'학습 데이터: {len(train_df)}장 | 클래스: {train_df.label.nunique()}개')
+
+    holdout_df = None
+    train_main_df = train_df
+    if config.USE_HOLDOUT:
+        train_main_df, holdout_df = train_test_split(
+            train_df,
+            test_size=config.HOLDOUT_RATIO,
+            stratify=train_df['label'],
+            random_state=config.HOLDOUT_RANDOM_STATE,
+        )
+        train_main_df = train_main_df.reset_index(drop=True)
+        holdout_df = holdout_df.reset_index(drop=True)
+        print(f'Hold-out 분리: train {len(train_main_df)} | holdout {len(holdout_df)}')
+    else:
+        train_main_df = train_main_df.reset_index(drop=True)
+
+    use_group_kfold = config.USE_GROUP_KFOLD and 'group' in train_main_df.columns
+    if use_group_kfold:
+        groups_per_label = train_main_df.groupby('label')['group'].nunique()
+        if groups_per_label.eq(1).all():
+            print('⚠️  그룹 정보가 클래스와 동일하여 StratifiedKFold로 전환합니다.')
+            use_group_kfold = False
 
     if config.USE_CLASS_WEIGHTS:
         class_weights = compute_class_weight(
             class_weight='balanced',
-            classes=np.unique(train_df['label']),
-            y=train_df['label'],
+            classes=np.unique(train_main_df['label']),
+            y=train_main_df['label'],
         )
         class_weights = torch.tensor(class_weights, dtype=torch.float32)
     else:
         class_weights = None
 
-    skf = StratifiedKFold(n_splits=config.N_FOLDS, shuffle=True, random_state=42)
+    if use_group_kfold:
+        print('📐 StratifiedGroupKFold 사용 (group 컬럼 활용)')
+        splitter = StratifiedGroupKFold(n_splits=config.N_FOLDS, shuffle=True, random_state=42)
+        split_iter = splitter.split(train_main_df, train_main_df['label'], groups=train_main_df['group'])
+    else:
+        print('📐 StratifiedKFold 사용')
+        splitter = StratifiedKFold(n_splits=config.N_FOLDS, shuffle=True, random_state=42)
+        split_iter = splitter.split(train_main_df, train_main_df['label'])
     fold_results = []
 
-    for fold, (train_idx, val_idx) in enumerate(skf.split(train_df, train_df['label']), start=1):
-        train_fold_df = train_df.iloc[train_idx]
-        val_fold_df = train_df.iloc[val_idx]
+    for fold, (train_idx, val_idx) in enumerate(split_iter, start=1):
+        train_fold_df = train_main_df.iloc[train_idx]
+        val_fold_df = train_main_df.iloc[val_idx]
         best_f1, model_path = train_fold(fold, train_fold_df, val_fold_df, EXP_DIR, class_weights, config)
         fold_results.append({'fold': fold, 'f1': best_f1, 'model_path': model_path})
 
@@ -774,6 +996,9 @@ if __name__ == '__main__':
     print(f'\n테스트 데이터: {len(test_df)}장')
 
     fold_info = [(row['fold'], row['f1'], row['model_path']) for _, row in results_df.iterrows()]
+    if holdout_df is not None and len(holdout_df) > 0:
+        evaluate_holdout(holdout_df, fold_info, config)
+
     predictions, avg_f1 = inference_ensemble(test_df, fold_info, config)
     submission_filename = create_submission(test_df, predictions, avg_f1, EXP_DIR)
 
