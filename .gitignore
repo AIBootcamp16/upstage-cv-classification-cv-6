@@ -53,7 +53,7 @@ checkpoints/
 logs/
 wandb/
 runs/
-/experiments/
+experiments/
 
 # OS
 .DS_Store
