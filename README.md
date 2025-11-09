@@ -34,7 +34,7 @@
 
 ### Directory
 
-- _Insert your directory structure_
+- <img width="322" height="361" alt="image" src="https://github.com/user-attachments/assets/5e352d8e-2783-4dd7-8d84-3a0e6788027c" />
 
 ## 3. Data descrption
 
