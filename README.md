@@ -4,7 +4,7 @@
 | ![박패캠](https://avatars.githubusercontent.com/u/156163982?v=4) | ![이패캠](https://avatars.githubusercontent.com/u/156163982?v=4) | ![최패캠](https://avatars.githubusercontent.com/u/156163982?v=4) | ![김패캠](https://avatars.githubusercontent.com/u/156163982?v=4) | ![오패캠](https://avatars.githubusercontent.com/u/156163982?v=4) |
 | :--------------------------------------------------------------: | :--------------------------------------------------------------: | :--------------------------------------------------------------: | :--------------------------------------------------------------: | :--------------------------------------------------------------: |
 |            [문서연](https://github.com/UpstageAILab)             |            [최현](https://github.com/UpstageAILab)             |            [김수현](https://github.com/UpstageAILab)             |            [이승호](https://github.com/UpstageAILab)             |            [오정택](https://github.com/UpstageAILab)             |
-|                            팀장, 담당 역할                             |                            담당 역할                             |                            담당 역할                             |                            담당 역할                             |                            담당 역할                             |
+|                            팀장, 실험총괄                             |                            ConvNext 모델링                             |                            ViT 모델링                             |                            실험 보조                             |                            실험 보조                             |
 
 ## 0. Overview
 ### Environment
