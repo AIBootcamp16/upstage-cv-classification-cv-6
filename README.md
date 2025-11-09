@@ -69,6 +69,9 @@ test [폴더] 3140장의 이미지가 저장되어 있습니다.
 <img width="5796" height="1561" alt="test_samples_set2" src="https://github.com/user-attachments/assets/ab36339a-4e26-4d3f-9616-d6d852da5889" />
 <img width="5970" height="1599" alt="test_samples_set3" src="https://github.com/user-attachments/assets/ac57acb2-bd5c-44d4-bee0-914c7a7fb2a2" />
 
+### 클래스별 분포 분석
+<img width="1338" height="1284" alt="image" src="https://github.com/user-attachments/assets/5786969d-c3a4-4c6c-91e4-759fc2e6537f" />
+
 ## 4. Modeling
 
 ### Model descrition
