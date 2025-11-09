@@ -38,8 +38,8 @@
 
 ### Dataset overview
 
-<img width="374" height="138" alt="image" src="https://github.com/user-attachments/assets/7a7860c7-13c2-410d-bc60-c42674d8b703" /\n>
-
+<img width="374" height="138" alt="image" src="https://github.com/user-attachments/assets/7a7860c7-13c2-410d-bc60-c42674d8b703" />
+<\n>
 학습 데이터셋 정보
 train [폴더] 1570장의 이미지가 저장되어 있습니다.
 train.csv [파일] 1570개의 행으로 이루어져 있습니다. train/ 폴더에 존재하는 1570개의 이미지에 대한 정답 클래스를 제공합니다.
