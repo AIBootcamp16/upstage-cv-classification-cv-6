@@ -73,11 +73,12 @@ test [폴더] 3140장의 이미지가 저장되어 있습니다.
 
 ## 4. Modeling
 
-### Model descrition
+### Baseline code - Private Board 0.9282
 
-- _Write model information and why your select this model_
+<img width="708" height="1104" alt="image" src="https://github.com/user-attachments/assets/d65c7fdc-dd27-4f00-94b8-577839869739" />
+<img width="722" height="1196" alt="image" src="https://github.com/user-attachments/assets/4bf8700b-0bb4-4aa5-9abb-1cd38f6dae80" />
 
-### Modeling Process
+### Modeling Process - Ensemble
 
 - _Write model train and test process with capture_
 
@@ -85,18 +86,13 @@ test [폴더] 3140장의 이미지가 저장되어 있습니다.
 
 ### Leader Board
 
-- _Insert Leader Board Capture_
-- _Write rank and score_
+<img width="967" height="309" alt="image" src="https://github.com/user-attachments/assets/c56e65e6-2fc2-4503-b1b5-a09cd7cf0775" />
+
+6조 3위 0.9401
 
 ### Presentation
 
 - _Insert your presentaion file(pdf) link_
-
-## etc
-
-### Meeting Log
-
-- _Insert your meeting log link like Notion or Google Docs_
 
 ### Reference
 
