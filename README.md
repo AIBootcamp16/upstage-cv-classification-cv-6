@@ -201,6 +201,8 @@ prediction = argmax(blended_probs)
 ---
 
 ## 5. Result
+### Presentation
+[패스트캠퍼스] AI 부트캠프 16기_CV 경진대회 발표_6조_저해상도.pdf](https://github.com/user-attachments/files/23516309/AI.16._CV._6._.pdf
 
 ### Leader Board
 
