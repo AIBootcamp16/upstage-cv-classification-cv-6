@@ -80,7 +80,125 @@ test [폴더] 3140장의 이미지가 저장되어 있습니다.
 
 ### Modeling Process - Ensemble
 
-- _Write model train and test process with capture_
+## 사용된 모델
+
+### 1. ViT (Vision Transformer) 계열
+- **vit_base**: `vit_base_patch16_384`
+  - Drop rate: 0.2, Drop path rate: 0.2
+- **vit_base_strong**: `vit_base_patch16_384`
+  - Drop rate: 0.3, Drop path rate: 0.3 (더 강한 regularization)
+- **vit_large**: `vit_large_patch16_384`
+  - Drop rate: 0.2, Drop path rate: 0.2
+
+### 2. ConvNeXt 계열
+- **convnext_large**: `convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_384`
+  - CLIP LAION2B pretrained + ImageNet-12k/1k fine-tuned
+  - Drop rate: 0.2
+
+### 3. Swin Transformer 계열
+- **swin_large**: `swin_large_patch4_window12_384`
+  - Drop rate: 0.2
+
+모든 모델은 timm 라이브러리를 통해 pretrained weights 사용
+
+---
+
+## 앙상블 방법
+
+### 1. OOF (Out-of-Fold) 기반 가중치 최적화
+
+#### 최적화 프로세스
+1. **Dirichlet 샘플링**:
+   - `n_iter`(기본 200회) 동안 Dirichlet 분포에서 가중치 샘플링
+   - OOF macro F1 score로 평가
+
+2. **Capped Simplex Projection**:
+   - `--weight-cap` 옵션으로 개별 모델 가중치 상한 제한
+   - Bisection method로 simplex 제약 하에 투영
+
+3. **Local Refinement** (Coordinate Ascent):
+   - 50회 반복으로 각 가중치를 ±0.05씩 조정
+   - 더 이상 개선 없을 때까지 반복
+
+### 2. 앙상블 공간 선택
+
+#### Probability Space (기본)
+```python
+blended = Σ(weight[i] * prob[i])
+prediction = argmax(blended)
+```
+
+#### Logit Space
+```python
+blended_logits = Σ(weight[i] * logit[i])
+blended_probs = softmax(blended_logits)
+prediction = argmax(blended_probs)
+```
+
+### 3. 후처리 기법
+
+#### Temperature Scaling (Calibration)
+- OOF logits에 LBFGS 최적화로 temperature 파라미터 학습
+- 모델 confidence 보정
+
+#### Prior Alignment
+- 학습 데이터 클래스 분포와 예측 분포 정렬
+- 공식: `adjusted = predictions * (π_target / π_pred)^α`
+
+---
+
+## 학습 기법
+
+### 1. Data Augmentation
+
+#### Base Augmentation
+- HorizontalFlip (p=0.5), VerticalFlip (p=0.5)
+- Rotate (±180°, p=0.7)
+- ShiftScaleRotate (p=0.6)
+- 밝기/대비 또는 HSV 조정 (p=0.5)
+
+#### Strong Augmentation
+- Base 기법 + 더 강한 확률과 파라미터
+- GaussNoise/Blur/MotionBlur (p=0.5)
+- CoarseDropout (p=0.5)
+- Grid/Optical Distortion (p=0.3)
+
+### 2. Mixup & CutMix
+- Alpha=0.4, CutMix 확률 50%
+- `--mixup-warmup` epoch 이후 적용
+- Mixed criterion으로 손실 계산
+
+### 3. Regularization
+- Label smoothing (기본 0.1)
+- Gradient clipping (max_norm=1.0)
+- Class-balanced weighted loss
+- Dropout & DropPath (모델별 설정)
+
+### 4. 최적화
+- Optimizer: AdamW
+- Scheduler: CosineAnnealingWarmRestarts (T_0=10)
+- Mixed Precision Training (AMP)
+- Gradient Accumulation
+
+---
+
+## TTA (Test-Time Augmentation)
+
+### 변환 종류
+- `original`: 원본
+- `hflip`: 수평 뒤집기
+- `vflip`: 수직 뒤집기
+- `rotate90`: 90도 회전
+
+### Multi-Scale TTA
+- ViT 계열: 고정 384 (architecture 제약)
+- 기타 모델: 설정된 scales (예: 352, 384, 416)
+
+### 집계 방법
+- 각 fold × TTA 변환 × scales 조합의 예측 평균
+- 최종: fold 평균
+
+---
 
 ## 5. Result
 
