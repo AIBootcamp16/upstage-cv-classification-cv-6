@@ -90,10 +90,6 @@ test [폴더] 3140장의 이미지가 저장되어 있습니다.
 
 6조 3위 0.9401
 
-### Presentation
-
-- _Insert your presentaion file(pdf) link_
-
 ### Reference
 
 - https://www.kaggle.com/
