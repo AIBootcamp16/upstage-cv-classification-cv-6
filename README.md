@@ -78,7 +78,7 @@ test [폴더] 3140장의 이미지가 저장되어 있습니다.
 <img width="708" height="1104" alt="image" src="https://github.com/user-attachments/assets/d65c7fdc-dd27-4f00-94b8-577839869739" />
 <img width="722" height="1196" alt="image" src="https://github.com/user-attachments/assets/4bf8700b-0bb4-4aa5-9abb-1cd38f6dae80" />
 
-### Modeling Process - Ensemble
+## Modeling Process - Ensemble
 
 ## 사용된 모델
 
