@@ -199,7 +199,9 @@ prediction = argmax(blended_probs)
 - 최종: fold 평균
 
 ---
-
+###
+- 베이스라인 코드: train_vit_base_384_WINNER.py
+- 앙상블 코드: mega_pipeline.py
 ## 5. Result
 ### Presentation
 [패스트캠퍼스] AI 부트캠프 16기_CV 경진대회 발표_6조_저해상도.pdf](https://github.com/user-attachments/files/23516309/AI.16._CV._6._.pdf
